@@ -11,7 +11,7 @@ A production-minded MVP for a ChatGPT-style assistant that chats naturally and t
   2. Fetch and summarize website title, meta description, and product messaging.
   3. Ask Claude for a viral UGC strategy as structured JSON.
   4. Search Giphy and Pexels using Claude-generated search terms.
-  5. Render a 1080x1920 MP4 with Remotion.
+  5. Render a 1080x1920 MP4 with Remotion using temporary server storage.
   6. Upload the rendered MP4 to Vercel Blob and return the public video URL in chat.
 
 ## Tech Stack

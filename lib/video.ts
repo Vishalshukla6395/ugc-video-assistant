@@ -1,8 +1,7 @@
 import {put} from "@vercel/blob";
-import {spawn} from "node:child_process";
 import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
-import {mkdir, unlink, writeFile} from "node:fs/promises";
+import {mkdir, unlink} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type {AssetBundle, MarketingStrategy} from "@/lib/types";
@@ -15,20 +14,9 @@ export async function renderUgcVideo(strategy: MarketingStrategy, assets: AssetB
   await mkdir(workDir, {recursive: true});
 
   const outputPath = path.join(workDir, `${id}.mp4`);
-  const jobPath = path.join(workDir, `${id}.json`);
-
-  await writeFile(
-    jobPath,
-    JSON.stringify({
-      outputPath,
-      strategy,
-      assets
-    }),
-    "utf8"
-  );
 
   try {
-    await runRenderWorker(jobPath);
+    await renderToFile(outputPath, strategy, assets);
     const video = await readFile(outputPath);
     const blob = await put(`ugc-videos/${id}.mp4`, video, {
       access: "public",
@@ -37,34 +25,41 @@ export async function renderUgcVideo(strategy: MarketingStrategy, assets: AssetB
 
     return blob.url;
   } finally {
-    await Promise.allSettled([unlink(jobPath), unlink(outputPath)]);
+    await Promise.allSettled([unlink(outputPath)]);
   }
 }
 
-async function runRenderWorker(jobPath: string) {
-  const tsxBin = path.join(process.cwd(), "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
-  const workerPath = path.join(process.cwd(), "scripts", "render-job.ts");
+async function renderToFile(outputPath: string, strategy: MarketingStrategy, assets: AssetBundle) {
+  const [{bundle}, {renderMedia, selectComposition}] = await Promise.all([
+    import("@remotion/bundler"),
+    import("@remotion/renderer")
+  ]);
 
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(tsxBin, [workerPath, jobPath], {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
+  const inputProps = {
+    strategy,
+    assets
+  };
 
-    let stderr = "";
-    child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
+  const serveUrl = await bundle({
+    entryPoint: path.join(process.cwd(), "remotion", "index.ts"),
+    webpackOverride: (config) => config
+  });
 
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(stderr || `Render worker exited with code ${code}`));
-    });
+  const composition = await selectComposition({
+    serveUrl,
+    id: "UgcVideo",
+    inputProps
+  });
+
+  await renderMedia({
+    composition,
+    serveUrl,
+    codec: "h264",
+    outputLocation: outputPath,
+    inputProps,
+    chromiumOptions: {
+      gl: "angle"
+    }
   });
 }
 
