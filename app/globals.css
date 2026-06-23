@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f7f7f4;
+  color: #171717;
+}
+
+.dark body {
+  background: #111111;
+  color: #f4f4f1;
+}
+
+::selection {
+  background: #191919;
+  color: #ffffff;
+}
