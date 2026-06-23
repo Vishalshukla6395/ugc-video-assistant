@@ -1,18 +1,21 @@
+import {put} from "@vercel/blob";
 import {spawn} from "node:child_process";
-import {mkdir, writeFile} from "node:fs/promises";
+import {randomUUID} from "node:crypto";
+import {readFile} from "node:fs/promises";
+import {mkdir, unlink, writeFile} from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import type {AssetBundle, MarketingStrategy} from "@/lib/types";
 
 export async function renderUgcVideo(strategy: MarketingStrategy, assets: AssetBundle) {
-  const outputDir = path.join(process.cwd(), "public", "generated");
-  const jobsDir = path.join(process.cwd(), ".next", "render-jobs");
-  await mkdir(outputDir, {recursive: true});
-  await mkdir(jobsDir, {recursive: true});
+  assertBlobConfigured();
 
-  const id = `${Date.now()}-${slugify(strategy.productName)}`;
-  const outputPath = path.join(outputDir, `${id}.mp4`);
-  const publicUrl = `/generated/${id}.mp4`;
-  const jobPath = path.join(jobsDir, `${id}.json`);
+  const id = `${Date.now()}-${randomUUID()}-${slugify(strategy.productName)}`;
+  const workDir = path.join(os.tmpdir(), "ugc-video-assistant");
+  await mkdir(workDir, {recursive: true});
+
+  const outputPath = path.join(workDir, `${id}.mp4`);
+  const jobPath = path.join(workDir, `${id}.json`);
 
   await writeFile(
     jobPath,
@@ -24,9 +27,18 @@ export async function renderUgcVideo(strategy: MarketingStrategy, assets: AssetB
     "utf8"
   );
 
-  await runRenderWorker(jobPath);
+  try {
+    await runRenderWorker(jobPath);
+    const video = await readFile(outputPath);
+    const blob = await put(`ugc-videos/${id}.mp4`, video, {
+      access: "public",
+      contentType: "video/mp4"
+    });
 
-  return publicUrl;
+    return blob.url;
+  } finally {
+    await Promise.allSettled([unlink(jobPath), unlink(outputPath)]);
+  }
 }
 
 async function runRenderWorker(jobPath: string) {
@@ -54,6 +66,12 @@ async function runRenderWorker(jobPath: string) {
       reject(new Error(stderr || `Render worker exited with code ${code}`));
     });
   });
+}
+
+function assertBlobConfigured() {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error("Missing BLOB_READ_WRITE_TOKEN. Configure Vercel Blob before generating videos.");
+  }
 }
 
 function slugify(value: string) {

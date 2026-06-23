@@ -12,7 +12,7 @@ A production-minded MVP for a ChatGPT-style assistant that chats naturally and t
   3. Ask Claude for a viral UGC strategy as structured JSON.
   4. Search Giphy and Pexels using Claude-generated search terms.
   5. Render a 1080x1920 MP4 with Remotion.
-  6. Save to `public/generated` and return the video URL in chat.
+  6. Upload the rendered MP4 to Vercel Blob and return the public video URL in chat.
 
 ## Tech Stack
 
@@ -40,13 +40,14 @@ Open `http://localhost:3000`.
 ANTHROPIC_API_KEY=sk-ant-...
 GIPHY_API_KEY=your_giphy_key
 PEXELS_API_KEY=your_pexels_key
+BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 DEFAULT_AUDIO_URL=https://example.com/royalty-free-track.mp3
 ```
 
 `DEFAULT_AUDIO_URL` is optional. When provided, it is added as low-volume background music in the generated Remotion video.
 
-The app includes graceful fallbacks for missing API keys so the UI and video pipeline can still be exercised in development. For production-quality output, provide Claude, Giphy, and Pexels keys.
+The app includes graceful fallbacks for missing Giphy and Pexels keys so the UI can still be exercised in development. Video generation requires `BLOB_READ_WRITE_TOKEN` because generated MP4s are uploaded to Vercel Blob instead of being persisted on local disk.
 
 ## Useful Commands
 
@@ -56,7 +57,7 @@ npm run build
 npm run render:sample
 ```
 
-`npm run render:sample` renders a sample CalAI-style video without using the chat UI.
+`npm run render:sample` renders a sample CalAI-style video, uploads it to Vercel Blob, and prints the public URL.
 
 ## Project Structure
 
@@ -71,7 +72,7 @@ lib/
   claude.ts               Claude conversation and strategy generation
   types.ts                Shared TypeScript types
   url.ts                  URL extraction
-  video.ts                Remotion renderer
+  video.ts                Remotion renderer and Vercel Blob uploader
   website.ts              Website HTML summarizer
 remotion/
   index.ts                Remotion root registration
@@ -83,6 +84,6 @@ scripts/
 
 ## Notes
 
-- Generated videos are written to `public/generated/*.mp4`.
+- Generated videos are rendered to temporary storage and uploaded to Vercel Blob.
 - The API route uses the Node.js runtime because Remotion rendering needs filesystem and Chromium access.
 - The endpoint has a `maxDuration` of 120 seconds for platforms that support longer serverless execution. For heavy production usage, move rendering into a background job or worker.
